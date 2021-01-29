@@ -8,6 +8,14 @@
 \description{
 What the package does (one paragraph).
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/CharnelMouse/codex}
+  \item Report bugs at \url{https://github.com/CharnelMouse/codex/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Mark Webster \email{markwebster204@yahoo.co.uk}
 
