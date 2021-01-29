@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+* matchups.nb.html
+*.html
+/results/*
