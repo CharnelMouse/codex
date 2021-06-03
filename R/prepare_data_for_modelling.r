@@ -1,6 +1,6 @@
 #' Get tidy model results from match data
 #'
-#' @param results A stan object.
+#' @param results A stan object, or a CmdStanMCMC object.
 #' @param model_data A list, containing data used for the simulation in
 #'   \code{results}.
 #' @param matches A data.frame containing Codex match data.
@@ -11,7 +11,18 @@
 #' @return A list containing model data, tidy results, and simulation
 #'   diagnostics.
 #' @export
-get_tidy_model_results <- function(results, model_data, matches, array = FALSE, log_lik = FALSE) {
+get_tidy_model_results <- function(
+  results,
+  model_data,
+  matches,
+  array = FALSE,
+  log_lik = FALSE
+) {
+  UseMethod("get_tidy_model_results", results)
+}
+
+#' @export
+get_tidy_model_results.stanfit <- function(results, model_data, matches, array = FALSE, log_lik = FALSE) {
   divergences <- sum(rstan::get_divergent_iterations(results))
   treedepths <- sum(rstan::get_max_treedepth_iterations(results))
   bad_chains <- sum(rstan::get_bfmi(results) < 0.2)
@@ -24,6 +35,21 @@ get_tidy_model_results <- function(results, model_data, matches, array = FALSE, 
       list(vs_array = extract_vs_model_array(sim)),
     if (log_lik)
       list(log_lik = loo::extract_log_lik(results, merge_chains = FALSE)))
+}
+
+#' @export
+get_tidy_model_results.CmdStanMCMC <- function(results, model_data, matches, array = FALSE, log_lik = FALSE) {
+  diagnostics <- results$sampler_diagnostics()
+  match_names <- match_names(matches)
+  tidy_results <- tidy_results(results, match_names, model_data)
+  sim <- list(diagnostics = diagnostics,
+              model_data = model_data, tidy_results = tidy_results)
+  c(sim,
+    if (array)
+      list(vs_array = extract_vs_model_array(sim)),
+    if (log_lik)
+      list(log_lik = results$lp())
+  )
 }
 
 match_names <- function(matches) {
@@ -122,6 +148,11 @@ prepare_match_data_for_modelling <- function(matches, starters, nicknames, mean 
 }
 
 tidy_results <- function(results, match_names, model_data) {
+  UseMethod("tidy_results", results)
+}
+
+#' @export
+tidy_results.stanfit <- function(results, match_names, model_data) {
   tidy_results <- rstan::extract(results, permuted = TRUE)
   tst <- tidy_results[[1L]]
   tst_dim <- dim(tst)
@@ -139,7 +170,8 @@ tidy_results <- function(results, match_names, model_data) {
   tidy_results$matchup <- `colnames<-`(as.data.table(tidy_results$matchup), match_names)
   colnames(tidy_results$player) <- model_data$players
   Reduce(function(x, y) add_tidy_names(x, model_data, y[[1]], y[[2]], y[[3]]),
-         list(list("player_turn"       , 2  , "players"),
+         list(list("base"              , 2  , "base"),
+              list("player_turn"       , 2  , "players"),
               list("deck"              , 2  , "deck_names"),
               list("deck_turn"         , 2  , "deck_names"),
               list("starter"           , 2  , "starters"),
@@ -155,6 +187,77 @@ tidy_results <- function(results, match_names, model_data) {
          init = tidy_results)
 }
 
+#' @export
+tidy_results.CmdStanMCMC <- function(results, match_names, model_data) {
+  tidy_results <- apply(results$draws(), 3, identity)
+  column_categories <- as.character(
+    regmatches(
+      colnames(tidy_results),
+      regexec("^\\w+", colnames(tidy_results))
+    )
+  )
+  groups <- unique(column_categories)
+  grouped_results <- setNames(
+    Map(
+      function(grp) tidy_results[, column_categories == grp, drop = FALSE],
+      groups
+    ),
+    groups
+  )
+  grouped_results$matchup <- `colnames<-`(as.data.table(grouped_results$matchup), match_names)
+  colnames(grouped_results$player) <- model_data$players
+  n_starters <- length(model_data$starters)
+  n_specs <- length(model_data$specs)
+  redimmed <- Reduce(
+    function(x, y) redim(x, y[[1]], y[[2]]),
+    list(
+      list("starter_spec", c(n_starters, n_specs)),
+      list("starter_vs_starter", c(n_starters, n_starters)),
+      list("starter_vs_spec", c(n_starters, n_specs)),
+      list("spec_vs_starter", c(n_specs, n_starters)),
+      list("spec_vs_spec", c(n_specs, n_specs))
+    ),
+    init = grouped_results
+  )
+  Reduce(function(x, y) add_tidy_names(x, model_data, y[[1]], y[[2]], y[[3]]),
+         list(list("base"              , 2  , "base"),
+              list("player_turn"       , 2  , "players"),
+              list("deck"              , 2  , "deck_names"),
+              list("deck_turn"         , 2  , "deck_names"),
+              list("starter"           , 2  , "starters"),
+              list("starter_turn"      , 2  , "starters"),
+              list("spec"              , 2  , "specs"),
+              list("spec_turn"         , 2  , "specs"),
+              list("starter_spec"      , 2:3, c("starters", "specs")),
+              list("spec_spec"         , 2  , "spec_specs"),
+              list("starter_vs_starter", 2:3, c("starters", "starters")),
+              list("starter_vs_spec"   , 2:3, c("starters", "specs")),
+              list("spec_vs_starter"   , 2:3, c("specs", "starters")),
+              list("spec_vs_spec"      , 2:3, c("specs", "specs"))),
+         init = redimmed)
+}
+
+redim <- function(lst, group, new_dims) {
+  orig <- lst[[group]]
+  if (is.null(orig))
+    return(lst)
+  orig_dim <- dim(orig)
+  if (prod(orig_dim[-1]) != prod(new_dims))
+    stop(
+      paste0(
+        "new dim lengths for ",
+        group,
+        " have the wrong length product: ",
+        prod(new_dims),
+        " instead of ",
+        prod(orig_dim[-1])
+      )
+    )
+  dim(orig) <- c(orig_dim[1], new_dims)
+  lst[[group]] <- orig
+  lst
+}
+
 add_tidy_names <- function(lst, original, element_name, element_indices, original_names) {
   if (length(element_indices) != length(original_names))
     stop(paste0(element_name, ": element_indices and original_names lengths must match"))
@@ -162,7 +265,12 @@ add_tidy_names <- function(lst, original, element_name, element_indices, origina
     return(lst)
   if (!identical(dim(lst[[element_name]])[element_indices],
                  unname(vapply(original_names, function(x) length(original[[x]]), integer(1)))))
-    stop(paste0(element_name, ": assigned dimnames have elements with the wrong length"))
+    stop(paste0(
+      element_name,
+      ": assigned dimnames have elements with the wrong length\n",
+      "expected: ", toString(dim(lst[[element_name]])[element_indices]),
+      "given: ", toString(vapply(original_names, function(x) length(original[[x]]), integer(1)))
+    ))
   dimnames(lst[[element_name]])[element_indices] <- lapply(original_names, function(x) original[[x]])
   lst
 }

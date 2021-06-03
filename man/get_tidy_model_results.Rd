@@ -13,7 +13,7 @@ get_tidy_model_results(
 )
 }
 \arguments{
-\item{results}{A stan object.}
+\item{results}{A stan object, or a CmdStanMCMC object.}
 
 \item{model_data}{A list, containing data used for the simulation in
 \code{results}.}

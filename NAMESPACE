@@ -2,6 +2,10 @@
 
 S3method(get_nash_equilibria,array)
 S3method(get_nash_equilibria,matrix)
+S3method(get_tidy_model_results,CmdStanMCMC)
+S3method(get_tidy_model_results,stanfit)
+S3method(tidy_results,CmdStanMCMC)
+S3method(tidy_results,stanfit)
 export(DT_mean_matchup)
 export(DT_nash)
 export(counter)
