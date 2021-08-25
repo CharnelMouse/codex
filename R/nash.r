@@ -233,7 +233,7 @@ plot_matchup_samples <- function(matchup_samples, break_interval = 1) {
     ggplot2::scale_y_continuous(breaks = seq.int(0, 10, by = break_interval)/10,
                                 labels = seq.int(0, 10, by = break_interval)) +
     ggplot2::facet_grid(P1 ~ P2) +
-    ggplot2::scale_fill_viridis_c(option = "B", guide = FALSE)
+    ggplot2::scale_fill_viridis_c(option = "B", guide = "none")
 }
 
 #' Print win probability information for matchup Nash equilibrium

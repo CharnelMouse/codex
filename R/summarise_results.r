@@ -107,7 +107,7 @@ plot_player_skill <- function(skills, turn = c("overall", "first", "second"), su
     ggplot2::coord_flip() +
     ggplot2::xlab("player") +
     ggplot2::ylab("skill") +
-    ggplot2::scale_fill_viridis_c(guide = FALSE, option = "B") +
+    ggplot2::scale_fill_viridis_c(guide = "none", option = "B") +
     ggplot2::theme(legend.position = "bottom")
   base_title <- "Player skill"
   add_title <- switch(turn,
