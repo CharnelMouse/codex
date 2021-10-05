@@ -127,10 +127,7 @@ get_matchup_array <- function(sim, deck_names, players = NULL, player_seed = 1) 
     deck_names <- unique(deck_names)
   player_info <- get_player_skills(sim$tidy_results, players, player_seed)
   deck_components <- codexdata::components(deck_names, codexdata::starters, codexdata::nicknames)
-  deck_info <- if (is.element("vs_array", names(sim)))
-    sim$vs_array
-  else
-    extract_vs_model_array(sim)
+  deck_info <- get_deck_component_matchups(sim, deck_components, player_seed)
   deck_effects <-
     deck_info[, deck_components$starter, deck_components$starter] +
     deck_info[, deck_components$starter, deck_components$spec1] +
@@ -159,7 +156,11 @@ get_matchup_array <- function(sim, deck_names, players = NULL, player_seed = 1) 
   P2_effect <- aperm(P1_effect, c(1, 3, 2))
   player_effects <- P1_effect - P2_effect
   total_effects <- deck_effects + player_effects
-  dimnames(total_effects) <- list(iteration = NULL, players, players)
+  dimnames(total_effects) <- list(
+    iteration = NULL,
+    paste(players, deck_names, sep = ":"),
+    paste(players, deck_names, sep = ":")
+  )
   1/(1 + exp(-total_effects))
 }
 
@@ -180,9 +181,96 @@ get_player_skills <- function(sim, players, player_seed = 1) {
     sim$sd_player
   else
     sqrt(sim$var_player)
-  added <- matrix(sd_players * stats::rnorm(length(missing) * nrow(player_info)),
+  added <- matrix(drop(sd_players) * stats::rnorm(length(missing) * nrow(player_info)),
                   ncol = length(missing), dimnames = list(NULL, missing))
   cbind(player_info, added)
+}
+
+get_deck_component_matchups <- function(sim, deck_components, deck_seed = 1) {
+  deck_info <- if (is.element("vs_array", names(sim)))
+    sim$vs_array
+  else
+    extract_vs_model_array(sim)
+  missing_starters <- setdiff(deck_components$starter, dimnames(deck_info)[[2]])
+  missing_specs <- setdiff(
+    c(deck_components$spec1, deck_components$spec2, deck_components$spec3),
+    dimnames(deck_info)[[2]]
+  )
+  if (length(missing_starters) == 0 && length(missing_specs) == 0)
+    deck_info
+  else{
+    nonmissing_starters <- intersect(deck_components$starter, dimnames(deck_info)[[2]])
+    all_starters <- c(nonmissing_starters, missing_starters)
+    nonmissing_specs <- intersect(
+      c(deck_components$spec1, deck_components$spec2, deck_components$spec3),
+      dimnames(deck_info)[[2]]
+    )
+    all_specs <- c(nonmissing_specs, missing_specs)
+    n_samples <- dim(deck_info)[[1]]
+
+    new_deck_info <- array(
+      dim = c(
+        n_samples,
+        length(all_starters) + length(all_specs),
+        length(all_starters) + length(all_specs)
+      ),
+      dimnames = list(
+        NULL,
+        c(all_starters, all_specs),
+        c(all_starters, all_specs)
+      )
+    )
+    new_deck_info[
+      ,
+      c(nonmissing_starters, nonmissing_specs),
+      c(nonmissing_starters, nonmissing_specs)
+    ] <- deck_info[
+      ,
+      c(nonmissing_starters, nonmissing_specs),
+      c(nonmissing_starters, nonmissing_specs)
+    ]
+
+    sd_StSt <- if (is.element("sd_starter_vs_starter", names(sim$tidy_results)))
+      sim$sd_starter_vs_starter
+    else
+      sqrt(sim$tidy_results$var_starter_vs_starter)
+    new_deck_info[
+      , all_starters, all_starters
+    ][
+      is.na(new_deck_info[, all_starters, all_starters])
+    ] <- drop(sd_StSt)*rnorm(sum(is.na(new_deck_info[, all_starters, all_starters])))
+
+    sd_StSp <- if (is.element("sd_starter_vs_spec", names(sim$tidy_results)))
+      sim$tidy_results$sd_starter_vs_spec
+    else
+      sqrt(sim$tidy_results$var_starter_vs_spec)
+    new_deck_info[
+      , all_starters, all_specs
+    ][
+      is.na(new_deck_info[, all_starters, all_specs])
+    ] <- drop(sd_StSp)*rnorm(sum(is.na(new_deck_info[, all_starters, all_specs])))
+    new_deck_info[
+      , all_specs, all_starters
+    ][
+      is.na(new_deck_info[, all_specs, all_starters])
+    ] <- drop(sd_StSp)*rnorm(sum(is.na(new_deck_info[, all_specs, all_starters])))
+
+    sd_SpSp <- if (is.element("sd_spec_vs_spec", names(sim$tidy_results)))
+      sim$tidy_results$sd_spec_vs_spec
+    else
+      sqrt(sim$tidy_results$var_spec_vs_spec)
+    new_deck_info[
+      , all_specs, all_specs
+    ][
+      is.na(new_deck_info[, all_specs, all_specs])
+    ] <- drop(sd_SpSp)*rnorm(sum(is.na(new_deck_info[, all_specs, all_specs])))
+
+    stopifnot(all(
+      deck_info[, c(nonmissing_starters, nonmissing_specs), c(nonmissing_starters, nonmissing_specs)] ==
+        new_deck_info[, c(nonmissing_starters, nonmissing_specs), c(nonmissing_starters, nonmissing_specs)]
+    ))
+    new_deck_info
+  }
 }
 
 #' Get sample data.table for matchup samples array
