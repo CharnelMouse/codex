@@ -4,10 +4,10 @@
 \alias{extract_vs_model_array}
 \title{Extract versus model opposed component pair effect array}
 \usage{
-extract_vs_model_array(sim)
+extract_vs_model_array(tidy_results)
 }
 \arguments{
-\item{sim}{A list, containing a versus model's tidy results.}
+\item{tidy_results}{A list, containing a versus model's tidy results.}
 }
 \value{
 An array of opposed component pair effects, with dimensions equal to

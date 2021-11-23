@@ -41,19 +41,21 @@ counter <- function(deck, vs_array, type = c("multi", "draft", "mono")) {
 #' @return An array of opposed component pair effects, with dimensions equal to
 #'   number of samples, then the number of starters plus numbers of specs twice.
 #' @export
-extract_vs_model_array <- function(sim) {
-  St <- sim$model_data$St
-  Sp <- sim$model_data$Sp
-  starters <- sim$model_data$starters
-  specs <- sim$model_data$specs
-  arr <- array(dim = c(nrow(sim$tidy_results$starter_vs_starter),
+extract_vs_model_array <- function(
+  tidy_results
+) {
+  St <- tidy_results$model_data$St
+  Sp <- tidy_results$model_data$Sp
+  starters <- tidy_results$model_data$starters
+  specs <- tidy_results$model_data$specs
+  arr <- array(dim = c(nrow(tidy_results$tidy_results$starter_vs_starter),
                        St + Sp,
                        St + Sp))
   for (i in 1:dim(arr)[1]) {
-    arr[i, , ] <- rbind(cbind(sim$tidy_results$starter_vs_starter[i, , ],
-                              sim$tidy_results$starter_vs_spec[i, , ]),
-                        cbind(sim$tidy_results$spec_vs_starter[i, , ],
-                              sim$tidy_results$spec_vs_spec[i, , ]))
+    arr[i, , ] <- rbind(cbind(tidy_results$tidy_results$starter_vs_starter[i, , ],
+                              tidy_results$tidy_results$starter_vs_spec[i, , ]),
+                        cbind(tidy_results$tidy_results$spec_vs_starter[i, , ],
+                              tidy_results$tidy_results$spec_vs_spec[i, , ]))
   }
   dimnames(arr) <- list(NULL, c(starters, specs), c(starters, specs))
   arr
@@ -67,17 +69,20 @@ extract_vs_model_array <- function(sim) {
 #'
 #' @return A data.table.
 #' @export
-get_variances <- function(sim, source = c("sd", "var")) {
+get_variances <- function(
+  tidy_results,
+  source = c("sd", "var")
+) {
   source <- match.arg(source)
   base <- switch(source,
-                 sd = data.table(`player skill` = 2 * as.numeric(sim$sd_player)^2,
-                                 `starter vs. starter` = as.numeric(sim$sd_starter_vs_starter)^2,
-                                 `starter vs. spec` = 3 * as.numeric(sim$sd_starter_vs_spec)^2,
-                                 `spec vs. spec` = 9 * as.numeric(sim$sd_spec_vs_spec)^2),
-                 var = data.table(`player skill` = 2 * as.numeric(sim$var_player),
-                                  `starter vs. starter` = as.numeric(sim$var_starter_vs_starter),
-                                  `starter vs. spec` = 3 * as.numeric(sim$var_starter_vs_spec),
-                                  `spec vs. spec` = 9 * as.numeric(sim$var_spec_vs_spec)))
+                 sd = data.table(`player skill` = 2 * as.numeric(tidy_results$sd_player)^2,
+                                 `starter vs. starter` = as.numeric(tidy_results$sd_starter_vs_starter)^2,
+                                 `starter vs. spec` = 3 * as.numeric(tidy_results$sd_starter_vs_spec)^2,
+                                 `spec vs. spec` = 9 * as.numeric(tidy_results$sd_spec_vs_spec)^2),
+                 var = data.table(`player skill` = 2 * as.numeric(tidy_results$var_player),
+                                  `starter vs. starter` = as.numeric(tidy_results$var_starter_vs_starter),
+                                  `starter vs. spec` = 3 * as.numeric(tidy_results$var_starter_vs_spec),
+                                  `spec vs. spec` = 9 * as.numeric(tidy_results$var_spec_vs_spec)))
   base[,
        c(.SD,
          list(`total deck` =
@@ -108,7 +113,7 @@ plot_variances <- function(variances) {
 
 #' Create an array of matchup matrix samples for given decks/players
 #'
-#' @param sim A list, containing a versus model's tidy results.
+#' @param tidy_results A list, containing a versus model's tidy results.
 #' @param deck_names A character vector, giving standardised deck names to get
 #'   matchups for. Standardised names may used the package's default nicknames.
 #' @param players A character vector, giving players to assign to the given
@@ -120,14 +125,31 @@ plot_variances <- function(variances) {
 #'
 #' @return An array, with dimensions (sample, player 1, player 2).
 #' @export
-get_matchup_array <- function(sim, deck_names, players = NULL, player_seed = 1) {
+get_matchup_array <- function(
+  tidy_results,
+  deck_names,
+  players = NULL,
+  player_seed = 1
+) {
   if (!is.null(players) && length(players) != length(deck_names))
     stop("deck_names and players lengths must match")
   if (is.null(players))
     deck_names <- unique(deck_names)
-  player_info <- get_player_skills(sim$tidy_results, players, player_seed)
-  deck_components <- codexdata::components(deck_names, codexdata::starters, codexdata::nicknames)
-  deck_info <- get_deck_component_matchups(sim, deck_components, player_seed)
+  player_info <- get_player_skills(
+    tidy_results$tidy_results,
+    players,
+    player_seed
+  )
+  deck_components <- codexdata::components(
+    deck_names,
+    codexdata::starters,
+    codexdata::nicknames
+  )
+  deck_info <- get_deck_component_matchups(
+    tidy_results,
+    deck_components,
+    player_seed
+  )
   deck_effects <-
     deck_info[, deck_components$starter, deck_components$starter] +
     deck_info[, deck_components$starter, deck_components$spec1] +
@@ -147,12 +169,16 @@ get_matchup_array <- function(sim, deck_names, players = NULL, player_seed = 1) 
     deck_info[, deck_components$spec3, deck_components$spec3]
   dimnames(deck_effects) <- list(NULL, deck_names, deck_names)
   if (is.null(players))
-    return(1/(1 + exp(-deck_effects)))
+    return(plogis(deck_effects))
   repeated_player_info <- apply(player_info[, players], 2, rep, length(players))
-  P1_effect <- aperm(array(repeated_player_info,
-                           dim = c(nrow(player_info), length(players), length(players)),
-                           dimnames = list(iteration = NULL, P2 = players, P1 = players)),
-                     c(1, 3, 2))
+  P1_effect <- aperm(
+    array(
+      repeated_player_info,
+      dim = c(nrow(player_info), length(players), length(players)),
+      dimnames = list(iteration = NULL, P2 = players, P1 = players)
+    ),
+    c(1, 3, 2)
+  )
   P2_effect <- aperm(P1_effect, c(1, 3, 2))
   player_effects <- P1_effect - P2_effect
   total_effects <- deck_effects + player_effects
@@ -161,7 +187,7 @@ get_matchup_array <- function(sim, deck_names, players = NULL, player_seed = 1) 
     paste(players, deck_names, sep = ":"),
     paste(players, deck_names, sep = ":")
   )
-  1/(1 + exp(-total_effects))
+  plogis(total_effects)
 }
 
 #' Get player skill sample array for given players, including unknown players
@@ -171,106 +197,127 @@ get_matchup_array <- function(sim, deck_names, players = NULL, player_seed = 1) 
 #' @return A matrix of log-odds player effects on P1 victory when the player is
 #'   P1, with dimensions (sample, player).
 #' @export
-get_player_skills <- function(sim, players, player_seed = 1) {
-  player_info <- sim$player
+get_player_skills <- function(
+  tidy_results,
+  players,
+  player_seed = 1
+) {
+  player_info <- tidy_results$player
   if (all(is.element(players, colnames(player_info))))
     return(player_info)
   set.seed(player_seed)
   missing <- setdiff(players, colnames(player_info))
-  sd_players <- if (is.element("sd_player", names(sim)))
-    sim$sd_player
+  sd_players <- if (is.element("sd_player", names(tidy_results)))
+    tidy_results$sd_player
   else
-    sqrt(sim$var_player)
-  added <- matrix(drop(sd_players) * stats::rnorm(length(missing) * nrow(player_info)),
-                  ncol = length(missing), dimnames = list(NULL, missing))
+    sqrt(tidy_results$var_player)
+  added <- matrix(
+    stats::rnorm(length(missing) * nrow(player_info), sd = drop(sd_players)),
+    ncol = length(missing),
+    dimnames = list(NULL, missing)
+  )
   cbind(player_info, added)
 }
 
-get_deck_component_matchups <- function(sim, deck_components, deck_seed = 1) {
-  deck_info <- if (is.element("vs_array", names(sim)))
-    sim$vs_array
+get_deck_component_matchups <- function(
+  vs_results,
+  deck_components,
+  deck_seed = 1
+) {
+  deck_info <- if (is.element("vs_array", names(vs_results)))
+    vs_results$vs_array
   else
-    extract_vs_model_array(sim)
-  missing_starters <- setdiff(deck_components$starter, dimnames(deck_info)[[2]])
+    extract_vs_model_array(vs_results)
+  missing_starters <- setdiff(deck_components$starter, colnames(deck_info))
   missing_specs <- setdiff(
     c(deck_components$spec1, deck_components$spec2, deck_components$spec3),
-    dimnames(deck_info)[[2]]
+    colnames(deck_info)
   )
   if (length(missing_starters) == 0 && length(missing_specs) == 0)
-    deck_info
-  else{
-    nonmissing_starters <- intersect(deck_components$starter, dimnames(deck_info)[[2]])
-    all_starters <- c(nonmissing_starters, missing_starters)
-    nonmissing_specs <- intersect(
-      c(deck_components$spec1, deck_components$spec2, deck_components$spec3),
-      dimnames(deck_info)[[2]]
-    )
-    all_specs <- c(nonmissing_specs, missing_specs)
-    n_samples <- dim(deck_info)[[1]]
+    return(deck_info)
+  nonmissing_starters <- intersect(deck_components$starter, colnames(deck_info))
+  all_starters <- c(nonmissing_starters, missing_starters)
+  nonmissing_specs <- intersect(
+    c(deck_components$spec1, deck_components$spec2, deck_components$spec3),
+    colnames(deck_info)
+  )
+  all_specs <- c(nonmissing_specs, missing_specs)
+  n_samples <- nrow(deck_info)
 
-    new_deck_info <- array(
-      dim = c(
-        n_samples,
-        length(all_starters) + length(all_specs),
-        length(all_starters) + length(all_specs)
-      ),
-      dimnames = list(
-        NULL,
-        c(all_starters, all_specs),
-        c(all_starters, all_specs)
-      )
+  new_deck_info <- array(
+    dim = c(
+      n_samples,
+      length(all_starters) + length(all_specs),
+      length(all_starters) + length(all_specs)
+    ),
+    dimnames = list(
+      NULL,
+      c(all_starters, all_specs),
+      c(all_starters, all_specs)
     )
-    new_deck_info[
+  )
+  new_deck_info[
+    ,
+    c(nonmissing_starters, nonmissing_specs),
+    c(nonmissing_starters, nonmissing_specs)
+  ] <- deck_info[
+    ,
+    c(nonmissing_starters, nonmissing_specs),
+    c(nonmissing_starters, nonmissing_specs)
+  ]
+
+  sd_StSt <- if (is.element("sd_starter_vs_starter", names(vs_results$tidy_results)))
+    vs_results$sd_starter_vs_starter
+  else
+    sqrt(vs_results$tidy_results$var_starter_vs_starter)
+  StSt_missing <- is.na(new_deck_info[, all_starters, all_starters])
+  new_deck_info[
+    , all_starters, all_starters
+  ][
+    StSt_missing
+  ] <- rnorm(sum(StSt_missing), sd = drop(sd_StSt))
+
+  sd_StSp <- if (is.element("sd_starter_vs_spec", names(vs_results$tidy_results)))
+    vs_results$tidy_results$sd_starter_vs_spec
+  else
+    sqrt(vs_results$tidy_results$var_starter_vs_spec)
+  StSp_missing <- is.na(new_deck_info[, all_starters, all_specs])
+  SpSt_missing <- is.na(new_deck_info[, all_specs, all_starters])
+  new_deck_info[
+    , all_starters, all_specs
+  ][
+    StSp_missing
+  ] <- rnorm(sum(StSp_missing), sd = drop(sd_StSp))
+  new_deck_info[
+    , all_specs, all_starters
+  ][
+    SpSt_missing
+  ] <- rnorm(sum(SpSt_missing), sd = drop(sd_StSp))
+
+  sd_SpSp <- if (is.element("sd_spec_vs_spec", names(vs_results$tidy_results)))
+    vs_results$tidy_results$sd_spec_vs_spec
+  else
+    sqrt(vs_results$tidy_results$var_spec_vs_spec)
+  SpSp_missing <- is.na(new_deck_info[, all_specs, all_specs])
+  new_deck_info[
+    , all_specs, all_specs
+  ][
+    SpSp_missing
+  ] <- rnorm(sum(SpSp_missing), sd = drop(sd_SpSp))
+
+  stopifnot(all(
+    deck_info[
       ,
       c(nonmissing_starters, nonmissing_specs),
       c(nonmissing_starters, nonmissing_specs)
-    ] <- deck_info[
-      ,
-      c(nonmissing_starters, nonmissing_specs),
-      c(nonmissing_starters, nonmissing_specs)
-    ]
-
-    sd_StSt <- if (is.element("sd_starter_vs_starter", names(sim$tidy_results)))
-      sim$sd_starter_vs_starter
-    else
-      sqrt(sim$tidy_results$var_starter_vs_starter)
-    new_deck_info[
-      , all_starters, all_starters
-    ][
-      is.na(new_deck_info[, all_starters, all_starters])
-    ] <- drop(sd_StSt)*rnorm(sum(is.na(new_deck_info[, all_starters, all_starters])))
-
-    sd_StSp <- if (is.element("sd_starter_vs_spec", names(sim$tidy_results)))
-      sim$tidy_results$sd_starter_vs_spec
-    else
-      sqrt(sim$tidy_results$var_starter_vs_spec)
-    new_deck_info[
-      , all_starters, all_specs
-    ][
-      is.na(new_deck_info[, all_starters, all_specs])
-    ] <- drop(sd_StSp)*rnorm(sum(is.na(new_deck_info[, all_starters, all_specs])))
-    new_deck_info[
-      , all_specs, all_starters
-    ][
-      is.na(new_deck_info[, all_specs, all_starters])
-    ] <- drop(sd_StSp)*rnorm(sum(is.na(new_deck_info[, all_specs, all_starters])))
-
-    sd_SpSp <- if (is.element("sd_spec_vs_spec", names(sim$tidy_results)))
-      sim$tidy_results$sd_spec_vs_spec
-    else
-      sqrt(sim$tidy_results$var_spec_vs_spec)
-    new_deck_info[
-      , all_specs, all_specs
-    ][
-      is.na(new_deck_info[, all_specs, all_specs])
-    ] <- drop(sd_SpSp)*rnorm(sum(is.na(new_deck_info[, all_specs, all_specs])))
-
-    stopifnot(all(
-      deck_info[, c(nonmissing_starters, nonmissing_specs), c(nonmissing_starters, nonmissing_specs)] ==
-        new_deck_info[, c(nonmissing_starters, nonmissing_specs), c(nonmissing_starters, nonmissing_specs)]
-    ))
-    new_deck_info
-  }
+    ] ==
+      new_deck_info[
+        ,
+        c(nonmissing_starters, nonmissing_specs),
+        c(nonmissing_starters, nonmissing_specs)
+      ]
+  ))
+  new_deck_info
 }
 
 #' Get sample data.table for matchup samples array
@@ -304,8 +351,13 @@ get_matchups_from_array <- function(matchup_array){
 #'   samples for that matchup, pre-calculated for use in
 #'   \code{\link{plot_matchup_samples}}.
 #' @export
-get_matchups <- function(sim, deck_names, players = NULL, player_seed = 1) {
-  get_matchups_from_array(get_matchup_array(sim, deck_names, players, player_seed))
+get_matchups <- function(
+  tidy_results,
+  deck_names,
+  players = NULL,
+  player_seed = 1
+) {
+  get_matchups_from_array(get_matchup_array(tidy_results, deck_names, players, player_seed))
 }
 
 #' Create an HTML table widget for a mean matchup matrix
