@@ -69,15 +69,12 @@ extract_vs_model_array <- function(sim) {
 #' @export
 get_variances <- function(sim, source = c("sd", "var")) {
   source <- match.arg(source)
-  base <- switch(source,
-                 sd = data.table(`player skill` = 2 * as.numeric(sim$sd_player)^2,
-                                 `starter vs. starter` = as.numeric(sim$sd_starter_vs_starter)^2,
-                                 `starter vs. spec` = 3 * as.numeric(sim$sd_starter_vs_spec)^2,
-                                 `spec vs. spec` = 9 * as.numeric(sim$sd_spec_vs_spec)^2),
-                 var = data.table(`player skill` = 2 * as.numeric(sim$var_player),
-                                  `starter vs. starter` = as.numeric(sim$var_starter_vs_starter),
-                                  `starter vs. spec` = 3 * as.numeric(sim$var_starter_vs_spec),
-                                  `spec vs. spec` = 9 * as.numeric(sim$var_spec_vs_spec)))
+  base <- data.table(
+    `player skill` = 2 * as.numeric(sim$sd_player)^2,
+    `starter vs. starter` = as.numeric(sim$sd_starter_vs_starter)^2,
+    `starter vs. spec` = 3 * as.numeric(sim$sd_starter_vs_spec)^2,
+    `spec vs. spec` = 9 * as.numeric(sim$sd_spec_vs_spec)^2
+  )
   base[,
        c(.SD,
          list(`total deck` =
@@ -177,12 +174,12 @@ get_player_skills <- function(sim, players, player_seed = 1) {
     return(player_info)
   set.seed(player_seed)
   missing <- setdiff(players, colnames(player_info))
-  sd_players <- if (is.element("sd_player", names(sim)))
-    sim$sd_player
-  else
-    sqrt(sim$var_player)
-  added <- matrix(drop(sd_players) * stats::rnorm(length(missing) * nrow(player_info)),
-                  ncol = length(missing), dimnames = list(NULL, missing))
+  sd_players <- sim$sd_player
+  added <- matrix(
+    stats::rnorm(length(missing) * nrow(player_info), sd = drop(sd_players)),
+    ncol = length(missing),
+    dimnames = list(NULL, missing)
+  )
   cbind(player_info, added)
 }
 
