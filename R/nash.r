@@ -6,47 +6,79 @@
 #' @return Either a matrix or an array of Nash equilibria, depending on the
 #'   given input's class.
 #' @export
-get_nash_equilibria <- function(matchups) {
+get_nash_equilibria <- function(
+  matchups
+) {
   UseMethod("get_nash_equilibria")
 }
 
 #' @export
-get_nash_equilibria.matrix <- function(matchups) {
+get_nash_equilibria.matrix <- function(
+  matchups
+) {
   deck_names <- rownames(matchups)
   if (!identical(deck_names, colnames(matchups)))
     stop("matrix row/column names don't match")
   name_dup <- which(!duplicated(deck_names))
   matchups <- as.matrix(matchups[name_dup, name_dup])
   deck_names <- deck_names[name_dup]
-
   n_decks <- nrow(matchups)
+
   P1_mat <- t(matchups)
-  P1_solution <- lpSolve::lp(direction = "min", rep(1, n_decks), rbind(diag(n_decks), P1_mat),
-                             rep(">=", 2*n_decks), rep(0:1, each = n_decks))
+  P1_solution <- lpSolve::lp(
+    direction = "min",
+    rep(1, n_decks),
+    rbind(diag(n_decks), P1_mat),
+    rep(">=", 2*n_decks), rep(0:1, each = n_decks)
+  )
   P1_value <- 1/sum(P1_solution$solution)
   P2_mat <- 1 - matchups
-  P2_solution <- lpSolve::lp(direction = "min", rep(1, n_decks), rbind(diag(n_decks), P2_mat),
-                             rep(">=", 2*n_decks), rep(0:1, each = n_decks))
+  P2_solution <- lpSolve::lp(
+    direction = "min",
+    rep(1, n_decks),
+    rbind(diag(n_decks), P2_mat),
+    rep(">=", 2*n_decks), rep(0:1, each = n_decks)
+  )
   P2_value <- 1/sum(P2_solution$solution)
-  both_solution <- lpSolve::lp(direction = "min", rep(1, n_decks),
-                               rbind(diag(n_decks), (P1_mat + P2_mat)/2),
-                               rep(">=", 2*n_decks), rep(0:1, each = n_decks))
+  both_solution <- lpSolve::lp(
+    direction = "min",
+    rep(1, n_decks),
+    rbind(diag(n_decks), (P1_mat + P2_mat)/2),
+    rep(">=", 2*n_decks),
+    rep(0:1, each = n_decks)
+  )
   both_value <- 1/sum(both_solution$solution)
-  cbind(data.table(Player = factor(c("P1", "P2", "Both"), c("P1", "P2", "Both")),
-                   `Win probability` = c(P1_value, 1 - P1_value, both_value)),
-        rbind(stats::setNames(P1_solution$solution*P1_value, deck_names),
-              stats::setNames(P2_solution$solution*P2_value, deck_names),
-              stats::setNames(both_solution$solution*both_value, deck_names)))
+  cbind(
+    data.table(
+      Player = factor(c("P1", "P2", "Both"), c("P1", "P2", "Both")),
+      `Win probability` = c(P1_value, 1 - P1_value, both_value)
+    ),
+    rbind(
+      stats::setNames(P1_solution$solution*P1_value, deck_names),
+      stats::setNames(P2_solution$solution*P2_value, deck_names),
+      stats::setNames(both_solution$solution*both_value, deck_names)
+    )
+  )
 }
 
 #' @export
-get_nash_equilibria.array <- function(matchups) {
-  vapply(1:dim(matchups)[[1]],
-         function(int) as.matrix(get_nash_equilibria.matrix(matrix(matchups[int, , ],
-                                                                   nrow = dim(matchups)[2],
-                                                                   dimnames = dimnames(matchups)[2:3])),
-                                 rownames = "Player"),
-         matrix(0, nrow = 3, ncol = 1 + length(unique(dimnames(matchups)[[3]]))))
+get_nash_equilibria.array <- function(
+  matchups
+) {
+  vapply(
+    seq.int(nrow(matchups)),
+    function(int) {
+      as.matrix(
+        get_nash_equilibria.matrix(matrix(
+          matchups[int, , ],
+          nrow = ncol(matchups),
+          dimnames = dimnames(matchups)[2:3]
+        )),
+        rownames = "Player"
+      )
+    },
+    matrix(0, nrow = 3, ncol = 1 + length(unique(dimnames(matchups)[[3]])))
+  )
 }
 
 #' Get mean matchup array directly from sim
@@ -67,10 +99,15 @@ get_nash_equilibria.array <- function(matchups) {
 #'
 #' @return A mean matchup matrix.
 #' @export
-get_mean_matchup_array_from_sim <- function(sim, deck_set = c("multi", "draft", "mono", "custom"),
-                                            deck_names = stop("deck_names must be specified for custom sets"),
-                                            players = NULL, player_seed = 1, progress = FALSE) {
-  with(get_info_for_nash_sims(sim, deck_set, deck_names, players, player_seed), {
+get_mean_matchup_array_from_sim <- function(
+  vs_results,
+  deck_set = c("multi", "draft", "mono", "custom"),
+  deck_names = stop("deck_names must be specified for custom sets"),
+  players = NULL,
+  player_seed = 1,
+  progress = FALSE
+) {
+  with(get_info_for_nash_sims(vs_results, deck_set, deck_names, players, player_seed), {
     res <- matrix(NA_real_, ncol = length(deck_names), nrow = length(deck_names))
     # paralellize using foreach's .combine argument?
     for (n in seq.int(n_iter)) {
@@ -100,11 +137,16 @@ get_mean_matchup_array_from_sim <- function(sim, deck_set = c("multi", "draft", 
 #'
 #' @return A Nash equilibrium array.
 #' @export
-get_nash_array_from_sim <- function(sim, deck_set = c("multi", "draft", "mono", "custom"),
-                                    deck_names = stop("deck_names must be specified for custom sets"),
-                                    players = NULL, player_seed = 1, progress = FALSE,
-                                    parallel = FALSE) {
-  with(get_info_for_nash_sims(sim, deck_set, deck_names, players, player_seed), {
+get_nash_array_from_sim <- function(
+  tidy_results,
+  deck_set = c("multi", "draft", "mono", "custom"),
+  deck_names = stop("deck_names must be specified for custom sets"),
+  players = NULL,
+  player_seed = 1,
+  progress = FALSE,
+  parallel = FALSE
+) {
+  with(get_info_for_nash_sims(tidy_results, deck_set, deck_names, players, player_seed), {
     if (!parallel)
       vapply(seq.int(n_iter),
              function(n) {

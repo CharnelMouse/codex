@@ -5,7 +5,7 @@
 \title{Get mean matchup array directly from sim}
 \usage{
 get_mean_matchup_array_from_sim(
-  sim,
+  vs_results,
   deck_set = c("multi", "draft", "mono", "custom"),
   deck_names = stop("deck_names must be specified for custom sets"),
   players = NULL,
@@ -14,8 +14,6 @@ get_mean_matchup_array_from_sim(
 )
 }
 \arguments{
-\item{sim}{A list, containing a versus model's tidy results.}
-
 \item{deck_set}{List of decks to use. \code{multi} uses all legal multicolour decks.
 \code{draft} also includes decks where none of the specs are from the same
 colour as the starter. \code{mono} only includes monocolour decks.

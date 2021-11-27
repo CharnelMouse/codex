@@ -4,10 +4,10 @@
 \alias{get_player_skills}
 \title{Get player skill sample array for given players, including unknown players}
 \usage{
-get_player_skills(sim, players, player_seed = 1)
+get_player_skills(tidy_results, players, player_seed = 1)
 }
 \arguments{
-\item{sim}{A list, containing a versus model's tidy results.}
+\item{tidy_results}{A list, containing a versus model's tidy results.}
 
 \item{players}{A character vector, giving players to assign to the given
 decks, in order. If NULL, players are not accounted for. Otherwise, the

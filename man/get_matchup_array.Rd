@@ -4,10 +4,10 @@
 \alias{get_matchup_array}
 \title{Create an array of matchup matrix samples for given decks/players}
 \usage{
-get_matchup_array(sim, deck_names, players = NULL, player_seed = 1)
+get_matchup_array(tidy_results, deck_names, players = NULL, player_seed = 1)
 }
 \arguments{
-\item{sim}{A list, containing a versus model's tidy results.}
+\item{tidy_results}{A list, containing a versus model's tidy results.}
 
 \item{deck_names}{A character vector, giving standardised deck names to get
 matchups for. Standardised names may used the package's default nicknames.}
