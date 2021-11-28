@@ -64,16 +64,12 @@ extract_vs_model_array <- function(
 #' Extract versus model component variance sample information
 #'
 #' @inheritParams get_matchup_array
-#' @param source a character, indicating whether standard deviations or
-#'   variances are given in \code{sim}.
 #'
 #' @return A data.table.
 #' @export
 get_variances <- function(
-  tidy_results,
-  source = c("sd", "var")
+  tidy_results
 ) {
-  source <- match.arg(source)
   base <- data.table(
     `player skill` = 2 * as.numeric(sim$sd_player)^2,
     `starter vs. starter` = as.numeric(sim$sd_starter_vs_starter)^2,

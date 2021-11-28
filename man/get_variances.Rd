@@ -4,13 +4,10 @@
 \alias{get_variances}
 \title{Extract versus model component variance sample information}
 \usage{
-get_variances(tidy_results, source = c("sd", "var"))
+get_variances(tidy_results)
 }
 \arguments{
 \item{tidy_results}{A list, containing a versus model's tidy results.}
-
-\item{source}{a character, indicating whether standard deviations or
-variances are given in \code{sim}.}
 }
 \value{
 A data.table.
