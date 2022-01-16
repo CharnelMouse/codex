@@ -163,6 +163,7 @@ get_matchup_array <- function(
   dimnames(deck_effects) <- list(NULL, deck_names, deck_names)
   if (is.null(players))
     return(plogis(deck_effects))
+  multideck <- as.logical(anyDuplicated(players))
   repeated_player_info <- apply(player_info[, players], 2, rep, length(players))
   P1_effect <- aperm(
     array(
@@ -175,10 +176,14 @@ get_matchup_array <- function(
   P2_effect <- aperm(P1_effect, c(1, 3, 2))
   player_effects <- P1_effect - P2_effect
   total_effects <- deck_effects + player_effects
+  nms <- if (multideck)
+    paste(players, deck_names, sep = ":")
+  else
+    players
   dimnames(total_effects) <- list(
     iteration = NULL,
-    paste(players, deck_names, sep = ":"),
-    paste(players, deck_names, sep = ":")
+    nms,
+    nms
   )
   plogis(total_effects)
 }
