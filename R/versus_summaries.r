@@ -205,7 +205,7 @@ get_player_skills <- function(
     return(player_info)
   set.seed(player_seed)
   missing <- setdiff(players, colnames(player_info))
-  sd_players <- sim$sd_player
+  sd_players <- tidy_results$sd_player
   added <- matrix(
     stats::rnorm(length(missing) * nrow(player_info), sd = drop(sd_players)),
     ncol = length(missing),
